@@ -1,0 +1,23 @@
+.meeting-cost-container {
+    padding: 10px 0;
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    border-top: 1px solid #eee;
+}
+
+.meeting-cost-icon {
+    font-size: 20px;
+    margin-right: 20px;
+    color: #3c4043;
+}
+
+.meeting-cost-details {
+    font-size: 14px;
+    color: #3c4043;
+}
+
+.meeting-cost-details strong {
+    font-size: 16px;
+    color: #1a73e8; /* Blu Google */
+}
