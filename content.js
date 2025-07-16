@@ -102,52 +102,51 @@ const calculateAndShowMeetingCost = (hourlyCost) => {
 
         // --- 2. Trova la durata del meeting in minuti ---
         let durationInMinutes = 0;
+        // Assumo che 'eventPopup' e 'log' siano definiti altrove
         const timeElement = eventPopup.querySelector('.AzuXid.O2VjS.CyPPBf');
         log(timeElement);
 
         if (timeElement) {
-            const timeRangeElement = timeElement.querySelector('span:last-child');
-            if (timeRangeElement && timeRangeElement.textContent.includes('-')) {
-                let timeText = timeRangeElement.textContent.trim().toUpperCase(); // Lavoriamo con uppercase per semplicità
-                log(`Stringa dell'orario trovata: "${timeText}"`);
+            const timeText = timeElement.textContent.trim().toUpperCase();
+            log(`Stringa dell'orario trovata: "${timeText}"`);
 
-                // Regex molto flessibile per catturare i vari formati
-                // Gruppi: 1:OraInizio, 2:PeriodoInizio(opz), 3:OraFine, 4:PeriodoFine(opz)
-                const timeMatch = timeText.match(/(\d{1,2}:\d{2})\s*(AM|PM)?\s*-\s*(\d{1,2}:\d{2})\s*(AM|PM)?/);
-                log(timeMatch);
+            // Regex per catturare l'orario (invariata)
+            // Gruppi: 1:OraInizio, 2:PeriodoInizio(opz), 3:OraFine, 4:PeriodoFine(opz)
+            const timeMatch = timeText.match(/(\d{1,2}:\d{2})\s*(AM|PM)?\s*-\s*(\d{1,2}:\d{2})\s*(AM|PM)?/);
+            log(timeMatch);
 
-                if (timeMatch) {
-                    let [, startHourStr, startPeriod, endHourStr, endPeriod] = timeMatch;
+            if (timeMatch) {
+                let [, startHourStr, startPeriod, endHourStr, endPeriod] = timeMatch;
 
-                    // --- Logica di inferenza del periodo (AM/PM) ---
-                    log(`Parsing iniziale: Inizio=${startHourStr}${startPeriod || ''}, Fine=${endHourStr}${endPeriod || ''}`);
+                log(`Parsing iniziale: Inizio=${startHourStr}${startPeriod || ''}, Fine=${endHourStr}${endPeriod || ''}`);
 
-                    // Se solo il periodo finale è specificato (es. 3:45 - 4:45PM)
-                    if (endPeriod && !startPeriod) {
-                        // Per decidere se l'inizio è AM o PM, confrontiamo le ore.
-                        // Es: "11:00 - 2:00PM" -> 11 è > 2, quindi l'inizio deve essere AM.
-                        // Es: "1:00 - 2:00PM"  -> 1 è < 2, quindi l'inizio deve essere PM.
-                        const startHour = parseInt(startHourStr.split(':')[0], 10);
-                        const endHour = parseInt(endHourStr.split(':')[0], 10);
+                // --- LOGICA DI ASSEGNAZIONE DIRETTA (come da tua richiesta) ---
 
-                        if (startHour > endHour || startHour === 12) { // 12 PM è un caso speciale
-                            startPeriod = 'AM';
-                        } else {
-                            startPeriod = endPeriod; // Altrimenti sono nello stesso periodo
-                        }
-                        log(`Periodo di inizio dedotto: ${startPeriod}`);
-                    }
+                // Se il periodo di inizio non è specificato, MA quello di fine sì,
+                // allora il periodo di inizio diventa uguale a quello di fine.
+                if (!startPeriod && endPeriod) {
+                    startPeriod = endPeriod;
+                    log(`Periodo di inizio dedotto (uguale a fine): ${startPeriod}`);
+                }
+                // Caso speculare (meno comune, ma gestito per robustezza):
+                // se il periodo di fine non è specificato, MA quello di inizio sì.
+                else if (!endPeriod && startPeriod) {
+                    endPeriod = startPeriod;
+                    log(`Periodo di fine dedotto (uguale a inizio): ${endPeriod}`);
+                }
 
-                    // Funzione di utilità per convertire 12h in oggetti Date
+                // Se entrambi i periodi sono presenti, o entrambi mancano, non facciamo nulla.
+
+                // Procediamo solo se abbiamo entrambi i periodi (originali o dedotti)
+                if (startPeriod && endPeriod) {
                     const createDateFrom12h = (hourStr, period) => {
                         let [hours, minutes] = hourStr.split(':').map(Number);
                         if (period === 'PM' && hours < 12) {
                             hours += 12;
                         }
-                        if (period === 'AM' && hours === 12) { // Mezzanotte (12 AM)
+                        if (period === 'AM' && hours === 12) { // Mezzanotte (12 AM) è 00:xx
                             hours = 0;
                         }
-                        // Usiamo il formato ISO per evitare ambiguità
                         const formattedTime = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
                         return new Date(`1970-01-01T${formattedTime}:00`);
                     };
@@ -160,14 +159,23 @@ const calculateAndShowMeetingCost = (hourlyCost) => {
 
                     durationInMinutes = (endTime.getTime() - startTime.getTime()) / (1000 * 60);
 
+                    // Questa riga ora è importante per correggere durate negative
+                    // che possono risultare dalla regola rigida.
+                    // Es. "9:10 - 4:05PM" -> 9:10 PM - 4:05 PM -> durata negativa
                     if (durationInMinutes < 0) {
-                        durationInMinutes += 24 * 60; // Gestisce meeting a cavallo della mezzanotte
+                        // Potrebbe essere un meeting a cavallo di mezzanotte OPPURE
+                        // un'interpretazione illogica (es. 9 PM -> 4 PM).
+                        // Aggiungere 24h gestisce entrambi i casi, anche se il secondo
+                        // potrebbe non essere l'intenzione umana.
+                        durationInMinutes += 24 * 60;
+                        log(`Durata negativa rilevata. Aggiunte 24h. Nuova durata: ${durationInMinutes}`);
                     }
                     log(`Durata calcolata: ${durationInMinutes} minuti.`);
-
                 } else {
-                    log("Formato dell'orario non riconosciuto dalla regex.");
+                    log("Impossibile calcolare la durata: periodi AM/PM ambigui o mancanti.");
                 }
+            } else {
+                log("Formato dell'orario non riconosciuto dalla regex.");
             }
         }
 
